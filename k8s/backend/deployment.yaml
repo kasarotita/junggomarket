@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: backend
   namespace: backend
-  labels:
-    app: backend
 spec:
   replicas: 3
   selector:
@@ -16,10 +14,14 @@ spec:
         app: backend
     spec:
       serviceAccountName: sa-backend
+      imagePullSecrets:
+      - name: ghcr-secret
+      securityContext:
+        runAsNonRoot: false
       containers:
       - name: backend
-        image: junggomarket-backend:1.0.0
-        imagePullPolicy: Never
+        image: ghcr.io/kasarotita/junggomarket-backend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         envFrom:
@@ -52,8 +54,6 @@ spec:
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
-      securityContext:
-        runAsNonRoot: false
 ---
 apiVersion: v1
 kind: Service

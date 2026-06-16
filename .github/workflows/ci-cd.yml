@@ -7,48 +7,47 @@ on:
     branches: [main]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/kasarotita/junggomarket
+  BACKEND_IMAGE: ghcr.io/kasarotita/junggomarket-backend
+  FRONTEND_IMAGE: ghcr.io/kasarotita/junggomarket-frontend
 
 jobs:
   backend-ci:
     name: Backend CI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Python 문법 검사
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 의존성 설치 및 검사
         run: |
           cd backend
           pip install -r requirements.txt
-
-      - name: Syntax check
-        run: |
-          cd backend
           python -m py_compile main.py
-          echo "✅ Backend syntax OK"
+          echo "✅ Backend OK"
 
-      - name: Build Docker image
+      - name: Docker 이미지 빌드
         run: |
           cd backend
-          docker build -t ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }} .
-          docker tag ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }} \
-            ${{ env.IMAGE_PREFIX }}-backend:latest
+          docker build -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} .
+          docker tag ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            ${{ env.BACKEND_IMAGE }}:latest
 
       - name: Trivy 보안 스캔
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }}
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
           exit-code: '0'
 
-      - name: Login to GitHub Container Registry
+      - name: ghcr.io 로그인
         if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
@@ -56,52 +55,52 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
+      - name: 이미지 Push
         if: github.ref == 'refs/heads/main'
         run: |
-          docker push ${{ env.IMAGE_PREFIX }}-backend:${{ github.sha }}
-          docker push ${{ env.IMAGE_PREFIX }}-backend:latest
+          docker push ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.BACKEND_IMAGE }}:latest
+          echo "✅ Backend 이미지 Push 완료"
 
   frontend-ci:
     name: Frontend CI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Node.js 설정
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: 의존성 설치 및 빌드
         run: |
           cd frontend
           npm ci
-
-      - name: Build
-        run: |
-          cd frontend
           npm run build
           echo "✅ Frontend build OK"
 
-      - name: Build Docker image
+      - name: Docker 이미지 빌드
         run: |
           cd frontend
-          docker build -t ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }} .
-          docker tag ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }} \
-            ${{ env.IMAGE_PREFIX }}-frontend:latest
+          docker build -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} .
+          docker tag ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            ${{ env.FRONTEND_IMAGE }}:latest
 
       - name: Trivy 보안 스캔
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }}
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           format: table
           severity: CRITICAL,HIGH
           exit-code: '0'
 
-      - name: Login to GitHub Container Registry
+      - name: ghcr.io 로그인
         if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
@@ -109,26 +108,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image
+      - name: 이미지 Push
         if: github.ref == 'refs/heads/main'
         run: |
-          docker push ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }}
-          docker push ${{ env.IMAGE_PREFIX }}-frontend:latest
+          docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.FRONTEND_IMAGE }}:latest
+          echo "✅ Frontend 이미지 Push 완료"
 
-  notify:
-    name: 완료 알림
+  deploy-check:
+    name: 배포 준비 확인
     needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
-    if: always()
+    if: github.ref == 'refs/heads/main'
     steps:
-      - name: 결과 출력
+      - name: 완료
         run: |
-          echo "Backend: ${{ needs.backend-ci.result }}"
-          echo "Frontend: ${{ needs.frontend-ci.result }}"
-          if [ "${{ needs.backend-ci.result }}" = "success" ] && \
-             [ "${{ needs.frontend-ci.result }}" = "success" ]; then
-            echo "✅ 전체 CI/CD 파이프라인 성공"
-          else
-            echo "❌ 일부 실패"
-            exit 1
-          fi
+          echo "✅ ghcr.io에 이미지 Push 완료"
+          echo "Backend: ghcr.io/kasarotita/junggomarket-backend:latest"
+          echo "Frontend: ghcr.io/kasarotita/junggomarket-frontend:latest"
+          echo "ArgoCD가 자동으로 클러스터에 배포합니다"
