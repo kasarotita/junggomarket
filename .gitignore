@@ -1,0 +1,8 @@
+node_modules/
+build/
+*.tar
+*.db
+.env
+__pycache__/
+*.pyc
+venv/
