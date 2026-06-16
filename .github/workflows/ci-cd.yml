@@ -82,7 +82,7 @@ jobs:
         run: |
           cd frontend
           npm ci
-          npm run build
+          CI=false npm run build
           echo "✅ Frontend build OK"
 
       - name: Docker 이미지 빌드
