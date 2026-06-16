@@ -3,14 +3,6 @@ import { Link } from 'react-router-dom';
 import { Heart, Eye, MapPin, Clock } from 'lucide-react';
 import { Product } from '../../api/products';
 
-const CATEGORY_COLORS: Record<string, string> = {
-  '전자기기': 'bg-blue-100 text-blue-700',
-  '의류/잡화': 'bg-pink-100 text-pink-700',
-  '가구/인테리어': 'bg-amber-100 text-amber-700',
-  '도서': 'bg-green-100 text-green-700',
-  '스포츠/레저': 'bg-purple-100 text-purple-700',
-  '기타': 'bg-gray-100 text-gray-600',
-};
 
 const PLACEHOLDER_EMOJIS = ['📱', '👕', '🛋️', '📚', '⚽', '📦', '💻', '🎮', '👜', '🚲'];
 
