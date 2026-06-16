@@ -1,52 +1,35 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Text, ARRAY, TIMESTAMP, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Text, TIMESTAMP, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional, List
+import hashlib
 import os
-import redis
 
-# 설정
 DATABASE_URL = f"postgresql://{os.getenv('POSTGRES_USER','postgres')}:{os.getenv('POSTGRES_PASSWORD','postgres123')}@{os.getenv('POSTGRES_HOST','localhost')}:{os.getenv('POSTGRES_PORT','5432')}/{os.getenv('POSTGRES_DB','junggomarket')}"
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "secret")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 
-# DB 설정
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
-# Redis
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", "6379")),
-    password=os.getenv("REDIS_PASSWORD", ""),
-    decode_responses=True
-)
-
-# 보안
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-# FastAPI 앱
 app = FastAPI(title="중고마켓 API", version="1.0.0")
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# DB 모델
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
@@ -86,7 +69,6 @@ class Like(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     product_id = Column(Integer, ForeignKey("products.id"))
 
-# Pydantic 스키마
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -108,10 +90,10 @@ class Token(BaseModel):
 
 class ProductCreate(BaseModel):
     title: str
-    description: Optional[str]
+    description: Optional[str] = None
     price: int
     category_id: int
-    location: Optional[str]
+    location: Optional[str] = None
 
 class ProductResponse(BaseModel):
     id: int
@@ -125,7 +107,6 @@ class ProductResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# 의존성
 def get_db():
     db = SessionLocal()
     try:
@@ -133,11 +114,11 @@ def get_db():
     finally:
         db.close()
 
-def verify_password(plain, hashed):
-    return pwd_context.verify(plain, hashed)
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def verify_password(plain: str, hashed: str) -> bool:
+    return hashlib.sha256(plain.encode()).hexdigest() == hashed
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -146,24 +127,18 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="인증 실패",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="인증 실패")
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="인증 실패")
     user = db.query(User).filter(User.email == email).first()
     if user is None:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="인증 실패")
     return user
 
-# 라우터
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "중고마켓 API"}
@@ -174,7 +149,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다")
     user = User(
         email=user_data.email,
-        hashed_password=get_password_hash(user_data.password),
+        hashed_password=hash_password(user_data.password),
         nickname=user_data.nickname,
         location=user_data.location
     )
@@ -188,8 +163,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="이메일 또는 비밀번호가 잘못되었습니다")
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": create_access_token({"sub": user.email}), "token_type": "bearer"}
 
 @app.get("/api/users/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
@@ -200,13 +174,7 @@ def get_categories(db: Session = Depends(get_db)):
     return db.query(Category).all()
 
 @app.get("/api/products", response_model=List[ProductResponse])
-def get_products(
-    skip: int = 0,
-    limit: int = 20,
-    category_id: Optional[int] = None,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
+def get_products(skip: int = 0, limit: int = 20, category_id: Optional[int] = None, search: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(Product).filter(Product.status == "selling")
     if category_id:
         query = query.filter(Product.category_id == category_id)
@@ -215,15 +183,8 @@ def get_products(
     return query.order_by(Product.created_at.desc()).offset(skip).limit(limit).all()
 
 @app.post("/api/products", response_model=ProductResponse)
-def create_product(
-    product_data: ProductCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    product = Product(
-        seller_id=current_user.id,
-        **product_data.dict()
-    )
+def create_product(product_data: ProductCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    product = Product(seller_id=current_user.id, **product_data.dict())
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -239,33 +200,21 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return product
 
 @app.post("/api/products/{product_id}/like")
-def toggle_like(
-    product_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    like = db.query(Like).filter(
-        Like.user_id == current_user.id,
-        Like.product_id == product_id
-    ).first()
+def toggle_like(product_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    like = db.query(Like).filter(Like.user_id == current_user.id, Like.product_id == product_id).first()
     product = db.query(Product).filter(Product.id == product_id).first()
     if like:
         db.delete(like)
-        product.like_count -= 1
+        product.like_count = max(0, product.like_count - 1)
         db.commit()
         return {"liked": False}
-    else:
-        db.add(Like(user_id=current_user.id, product_id=product_id))
-        product.like_count += 1
-        db.commit()
-        return {"liked": True}
+    db.add(Like(user_id=current_user.id, product_id=product_id))
+    product.like_count += 1
+    db.commit()
+    return {"liked": True}
 
 @app.delete("/api/products/{product_id}")
-def delete_product(
-    product_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def delete_product(product_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다")

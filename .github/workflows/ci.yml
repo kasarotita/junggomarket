@@ -1,0 +1,48 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install & Test
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          python -c "import main; print('Backend OK')"
+      - name: Build Image
+        run: |
+          cd backend
+          docker build -t junggomarket-backend:${{ github.sha }} .
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: junggomarket-backend:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '0'
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install & Build
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Build Image
+        run: |
+          cd frontend
+          docker build -t junggomarket-frontend:${{ github.sha }} .
