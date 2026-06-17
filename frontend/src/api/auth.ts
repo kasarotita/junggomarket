@@ -1,22 +1,10 @@
 import client from './client';
-
-export interface LoginData { username: string; password: string; }
-export interface RegisterData {
-  email: string; password: string;
-  nickname: string; location?: string;
-}
-
-// FastAPI OAuth2 형식은 form-data로 보내야 함
-export const login = (data: LoginData) => {
-  const formData = new URLSearchParams();
-  formData.append('username', data.username);
-  formData.append('password', data.password);
-  return client.post('/auth/login', formData.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  });
+export const login = (data: { username: string; password: string }) => {
+  const fd = new URLSearchParams();
+  fd.append('username', data.username); fd.append('password', data.password);
+  return client.post('/auth/login', fd.toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
 };
-
-export const register = (data: RegisterData) =>
-  client.post('/auth/register', data);
-
+export const register = (data: any) => client.post('/auth/register', data);
 export const getMe = () => client.get('/users/me');
+export const updateMe = (data: any) => client.put('/users/me', null, { params: data });
+export const getUser = (id: number) => client.get(`/users/${id}`);
