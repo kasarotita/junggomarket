@@ -346,6 +346,34 @@ def send_message(room_id: int, data: ChatMessageCreate,
     msg = ChatMessage(room_id=room_id, sender_id=u.id, content=data.content)
     db.add(msg); db.commit(); db.refresh(msg); return msg
 
+
+import httpx
+
+@app.post("/api/ai/chat")
+async def ai_chat(request: dict):
+    message = request.get("message", "")
+    history = request.get("history", [])
+
+    system = """당신은 중고마켓의 AI 상담사입니다.
+오직 중고 거래와 관련된 질문에만 답변하세요.
+관련 주제: 거래 방법, 사기 예방, 가격 협상, 물품 상태 확인, 배송/택배, 안전 거래, 중고 물품 관련 팁.
+중고 거래와 무관한 질문(주식, 정치, 연예, 요리 등)에는 "죄송합니다, 저는 중고 거래 관련 질문만 답변할 수 있어요 😊 중고 거래에 대해 궁금한 점이 있으시면 편하게 물어보세요!"라고 답하세요.
+항상 친절하고 간결하게 한국어로 답변하세요."""
+
+    msgs = [{"role": m["role"], "content": m["content"]} for m in history if m.get("role") in ["user","assistant"]]
+    msgs.append({"role": "user", "content": message})
+
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"Content-Type": "application/json", "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""), "anthropic-version": "2023-06-01"},
+            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": msgs},
+            timeout=30
+        )
+        data = res.json()
+        reply = data.get("content", [{}])[0].get("text", "죄송합니다, 잠시 후 다시 시도해주세요.")
+    return {"reply": reply}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

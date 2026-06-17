@@ -1,14 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Minimize2 } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, Minimize2, Sparkles } from 'lucide-react';
 
 interface Message { role: 'user' | 'assistant'; content: string; }
 
-const SYSTEM = '당신은 중고마켓의 친절한 AI 상담사입니다. 중고 거래 관련 질문에 답변하고 안전한 거래 방법을 안내합니다. 사기 예방, 가격 협상, 물품 상태 확인 등에 대해 도움을 드립니다. 항상 친절하고 간결하게 한국어로 답변하세요.';
+const QUICK_QUESTIONS = [
+  '사기 예방 방법 알려줘',
+  '가격 협상 어떻게 해?',
+  '안전한 거래 장소는?',
+  '택배 거래 주의사항',
+];
 
 const AIChatBot: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: '안녕하세요! 중고마켓 AI 상담사입니다 😊\n중고 거래에 대해 궁금한 것이 있으시면 편하게 물어보세요!' }
+    { role: 'assistant', content: '안녕하세요! 중고마켓 AI 상담사입니다 😊\n\n중고 거래에 대해 궁금한 것이 있으시면 편하게 물어보세요! 아래 자주 묻는 질문을 클릭해도 됩니다.' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,80 +21,95 @@ const AIChatBot: React.FC = () => {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const send = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg: Message = { role: 'user', content: input.trim() };
+  const send = async (text?: string) => {
+    const content = text || input.trim();
+    if (!content || loading) return;
+    const userMsg: Message = { role: 'user', content };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
-          system: SYSTEM,
-          messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ message: content, history: messages.slice(-6) }),
       });
-      const data = await response.json();
-      const reply = data.content?.[0]?.text || '죄송합니다, 잠시 후 다시 시도해주세요.';
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply || '죄송합니다, 잠시 후 다시 시도해주세요.' }]);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: '네트워크 오류가 발생했습니다.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '죄송합니다, 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }]);
     } finally { setLoading(false); }
   };
 
   return (
     <>
       <button onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 hover:bg-orange-600 text-white rounded-full shadow-lg flex items-center justify-center z-50 transition-all hover:scale-110 active:scale-95">
-        {open ? <X size={24}/> : <MessageCircle size={24}/>}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-xl flex items-center justify-center z-50 transition-all hover:scale-105 active:scale-95">
+        {open ? <X size={22}/> : <MessageCircle size={22}/>}
+        {!open && <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white animate-pulse"/>}
       </button>
+
       {open && (
-        <div className="fixed bottom-24 right-6 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl flex flex-col z-50 border border-gray-100" style={{height:'480px'}}>
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100 bg-orange-500 rounded-t-3xl">
-            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-              <Bot size={20} className="text-white"/>
+        <div className="fixed bottom-24 right-6 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl flex flex-col z-50 border border-gray-100" style={{height:'520px'}}>
+          <div className="flex items-center gap-3 px-4 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-t-3xl">
+            <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+              <Sparkles size={20} className="text-white"/>
             </div>
             <div>
-              <p className="font-bold text-white text-sm">중고마켓 AI 상담사</p>
-              <p className="text-orange-100 text-xs">안전한 거래를 도와드립니다</p>
+              <p className="font-black text-white text-sm">중고마켓 AI 상담사</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"/>
+                <p className="text-indigo-200 text-xs">온라인</p>
+              </div>
             </div>
-            <button onClick={() => setOpen(false)} className="ml-auto text-white/70 hover:text-white"><Minimize2 size={18}/></button>
+            <button onClick={() => setOpen(false)} className="ml-auto text-white/60 hover:text-white transition-colors"><Minimize2 size={18}/></button>
           </div>
+
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex \${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={i} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                 {msg.role === 'assistant' && (
-                  <div className="w-7 h-7 bg-orange-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
-                    <Bot size={14} className="text-orange-500"/>
+                  <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center mr-2 flex-shrink-0 mt-0.5">
+                    <Sparkles size={14} className="text-indigo-600"/>
                   </div>
                 )}
-                <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap \${msg.role === 'user' ? 'bg-orange-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-900 rounded-tl-sm'}`}>
+                <div className={'max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ' + (msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-900 rounded-tl-sm')}>
                   {msg.content}
                 </div>
               </div>
             ))}
             {loading && (
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-orange-100 rounded-full flex items-center justify-center"><Bot size={14} className="text-orange-500"/></div>
-                <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1">
-                  {[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:`\${i*0.15}s`}}/>)}
+                <div className="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center">
+                  <Sparkles size={14} className="text-indigo-600"/>
                 </div>
+                <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1">
+                  {[0,1,2].map(i=><div key={i} className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: i===0?'0s':i===1?'0.15s':'0.3s'}}/>)}
+                </div>
+              </div>
+            )}
+            {messages.length === 1 && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 text-center">자주 묻는 질문</p>
+                {QUICK_QUESTIONS.map(q=>(
+                  <button key={q} onClick={() => send(q)}
+                    className="w-full text-left px-3 py-2.5 text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl transition-colors font-medium border border-indigo-100">
+                    {q}
+                  </button>
+                ))}
               </div>
             )}
             <div ref={bottomRef}/>
           </div>
+
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="flex gap-2">
               <input value={input} onChange={e=>setInput(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
-                className="flex-1 px-3.5 py-2.5 bg-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:bg-white transition-all"
-                placeholder="메시지를 입력하세요"/>
-              <button onClick={send} disabled={!input.trim()||loading}
-                className="w-10 h-10 flex items-center justify-center bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-2xl transition-colors flex-shrink-0">
+                className="flex-1 px-4 py-2.5 bg-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                placeholder="중고 거래 관련 질문을 입력하세요"/>
+              <button onClick={() => send()} disabled={!input.trim()||loading}
+                className="w-11 h-11 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-2xl transition-colors flex-shrink-0">
                 <Send size={16}/>
               </button>
             </div>

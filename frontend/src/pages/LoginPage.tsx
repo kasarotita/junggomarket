@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShoppingBag, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
+import Logo from '../components/common/Logo';
 import { login, getMe } from '../api/auth';
 import { useAuthStore } from '../store/authStore';
 
@@ -27,11 +28,8 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-2xl shadow-lg shadow-orange-200 mb-4">
-            <ShoppingBag size={28} className="text-white"/>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">중고마켓</h1>
-          <p className="text-gray-500 text-sm mt-1">믿을 수 있는 중고 거래</p>
+          <Logo size="lg" />
+          <p className="text-gray-400 text-sm mt-2">믿을 수 있는 중고 거래 플랫폼</p>
         </div>
         <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
           <h2 className="text-xl font-bold mb-6">로그인</h2>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShoppingBag, Mail, Lock, User, MapPin, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, MapPin, ArrowRight } from 'lucide-react';
+import Logo from '../components/common/Logo';
 import { register } from '../api/auth';
 
 const RegisterPage: React.FC = () => {
@@ -27,10 +28,7 @@ const RegisterPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-2xl shadow-lg shadow-orange-200 mb-4">
-            <ShoppingBag size={28} className="text-white"/>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">중고마켓</h1>
+          <Logo size="lg" />
         </div>
         <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
           <h2 className="text-xl font-bold mb-6">회원가입</h2>
